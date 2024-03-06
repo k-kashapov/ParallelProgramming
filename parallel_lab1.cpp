@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <malloc.h>
 #include <raylib.h>
+#include <mpi.h>
 
 typedef struct dim {
     double len;
@@ -100,10 +101,31 @@ static double calculate_new_point(data_xy *state, uint32_t x_pos, uint32_t y_pos
     return data[x_pos][y_pos] + state->d.t.step * state->d_coeff * r_side;
 }
 
-static void calculate_row(data_xy *state, uint32_t row) {
+static void calculate_row(data_xy *state, uint32_t row, uint32_t rank, uint32_t size) {
     if ((row < 1) || (row >= state->d.t.pts_num)) return;
-    for (uint32_t i = 1; i < state->d.x.pts_num - 1; i++) {
+
+    uint32_t chunk_size = (state->d.x.pts_num / (size + 1));
+    uint32_t init_i = 1 + chunk_size * rank;
+
+    uint32_t end_i = init_i + chunk_size < state->d.x.pts_num - 1 ? init_i + chunk_size : state->d.x.pts_num - 1;
+    if (rank == size - 1) end_i = state->d.x.pts_num - 1;
+
+    for (uint32_t i = init_i; i < end_i; i++) {
         state->data[i][row] = calculate_new_point(state, i, row - 1);
+    }
+
+    if (rank > 0) {
+        // printf("%d: Waiting for %d\n", rank, rank - 1);
+        MPI_Recv(&state->data[init_i - 1][row], 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        // printf("%d: Sending to %d\n", rank, rank - 1);
+        MPI_Send(&state->data[init_i][row],     1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD);
+    }
+
+    if (rank < size - 1) {
+        // printf("%d: Sending to %d\n", rank, rank + 1);
+        MPI_Send(&state->data[end_i - 1][row], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
+        // printf("%d: Waiting for %d\n", rank, rank + 1);
+        MPI_Recv(&state->data[end_i][row],     1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 }
 
@@ -115,11 +137,17 @@ static void data_free(data_xy *state) {
     free(state->data);
 }
 
-int main(int argc, const char **argv) {
+int main(int argc, char **argv) {
+    int process_rank, size_of_cluster;
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &size_of_cluster);
+    MPI_Comm_rank(MPI_COMM_WORLD, &process_rank);
+
     dim x = {1.0, 1000, 0.0};
     x.step = x.len / x.pts_num;
 
-    dim t = {2.0, 800000, 0.0};
+    dim t = {20.0, 1000000, 0.0};
     t.step = t.len / t.pts_num;
 
     const dimensions dims = {x, t};
@@ -138,20 +166,31 @@ int main(int argc, const char **argv) {
         data[x.pts_num - 1][i] = data[x.pts_num - 1][0] - (t.step * i);
     }
 
-    data_xy state = {data, dims, 1e-3};
+    data_xy state = {data, dims, 1e-2};
+
+    printf("Process %d started\n", process_rank);
+
+    MPI_Barrier(MPI_COMM_WORLD);
 
     for (uint32_t row = 0; row < t.pts_num; row++) {
-        calculate_row(&state, row);
-        printf("\rDone %6d/%6d rows", row, t.pts_num);
+        calculate_row(&state, row, process_rank, size_of_cluster);
+        // printf("\r%d: Done %6d/%6d rows", process_rank, row, t.pts_num);
     }
 
-    printf("\n");
+    // printf("\n");
+    printf("Process %d finished\n", process_rank);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    MPI_Finalize();
 
     // data_print(&state);
 
-    draw_results(&state);
+    printf("data [%d][%d] = %lf\n", 199, t.pts_num - 1, state.data[199][t.pts_num - 1]);
 
+    // if (process_rank == 0) {
     data_free(&state);
+    // }
 
     return 0;
 }
