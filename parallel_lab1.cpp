@@ -107,16 +107,12 @@ static void calculate_row(data_xy *state, uint32_t row, uint32_t from, uint32_t 
     }
 
     if (rank > 0) {
-        // printf("%d: Waiting for %d\n", rank, rank - 1);
         MPI_Recv(&state->data[from - 1][row], 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        // printf("%d: Sending to %d\n", rank, rank - 1);
         MPI_Send(&state->data[from][row],     1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD);
     }
 
     if (rank < size - 1) {
-        // printf("%d: Sending to %d\n", rank, rank + 1);
         MPI_Send(&state->data[to - 1][row], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
-        // printf("%d: Waiting for %d\n", rank, rank + 1);
         MPI_Recv(&state->data[to][row],     1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 }
@@ -181,24 +177,19 @@ int main(int argc, char **argv) {
 
     MPI_Barrier(MPI_COMM_WORLD);
 
-    // data_print(&state);
+    // for (int rank = 0; rank < size_of_cluster; rank++) {
+    //     if (rank == process_rank) {
+    //         for (uint32_t i = init_i; i < end_i; i++) {
+    //             printf("data[%d][%d] = %lf\n", i, t.pts_num - 1, data[i][t.pts_num - 1]);
+    //         }
+    //     }
 
-    for (int rank = 0; rank < size_of_cluster; rank++) {
-        if (rank == process_rank) {
-            for (uint32_t i = init_i; i < end_i; i++) {
-                printf("data[%d][%d] = %lf\n", i, t.pts_num - 1, data[i][t.pts_num - 1]);
-            }
-        }
-
-        MPI_Barrier(MPI_COMM_WORLD);
-    }
+    //     MPI_Barrier(MPI_COMM_WORLD);
+    // }
 
     MPI_Finalize();
-    // draw_results(&state);
-
-    // if (process_rank == 0) {
+    draw_results(&state);
     data_free(&state);
-    // }
 
     return 0;
 }
