@@ -23,4 +23,4 @@ The initial conditions required are T(x_start, t), T(x_end, t), T(x, 0)
 The output is temperature distribution T(x, t_end)
 
 Example output
-![Example of heatmap](https://github.com/k-kashapov/)
+![Example of heatmap](https://github.com/k-kashapov/ParallelProgramming/blob/master/img/Example.png)
