@@ -158,7 +158,7 @@ int main(int argc, char **argv) {
 
     MPI_Barrier(MPI_COMM_WORLD);
 
-    uint32_t chunk_size = (x.pts_num / (size_of_cluster + 1));
+    uint32_t chunk_size = (x.pts_num / (size_of_cluster));
     
     uint32_t init_i = 1 + chunk_size * process_rank;
     uint32_t end_i = init_i + chunk_size;
@@ -188,7 +188,7 @@ int main(int argc, char **argv) {
     // }
 
     MPI_Finalize();
-    draw_results(&state);
+    // draw_results(&state);
     data_free(&state);
 
     return 0;
