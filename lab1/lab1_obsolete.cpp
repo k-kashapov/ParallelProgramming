@@ -3,8 +3,6 @@
 #include <stdio.h>
 #include <malloc.h>
 #include <raylib.h>
-#include <mpi.h>
-#include <assert.h>
 
 typedef struct dim {
     double len;
@@ -76,11 +74,10 @@ static void draw_results(data_xy *state) {
 }
 
 static double **data_alloc(uint32_t pts_x, uint32_t pts_y) {
-    double **data = (double **) calloc(pts_x, sizeof(double *));
-    double *data_buf = (double *) calloc(pts_x * pts_y, sizeof(double));
-
+    double **data = (double **) calloc(pts_x, sizeof(data[0]));
+    
     for (uint32_t i = 0; i < pts_x; i++) {
-        data[i] = data_buf + i;
+        data[i] = (double *) calloc(pts_y, sizeof(data[i][0]));
     }
 
     return data;
@@ -103,38 +100,26 @@ static double calculate_new_point(data_xy *state, uint32_t x_pos, uint32_t y_pos
     return data[x_pos][y_pos] + state->d.t.step * state->d_coeff * r_side;
 }
 
-static void calculate_row(data_xy *state, uint32_t row, uint32_t from, uint32_t to, uint32_t rank, uint32_t size) {
-    for (uint32_t i = from; i < to; i++) {
+static void calculate_row(data_xy *state, uint32_t row) {
+    if ((row < 1) || (row >= state->d.t.pts_num)) return;
+    for (uint32_t i = 1; i < state->d.x.pts_num - 1; i++) {
         state->data[i][row] = calculate_new_point(state, i, row - 1);
-    }
-
-    if (rank > 0) {
-        MPI_Recv(&state->data[from - 1][row], 1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        MPI_Send(&state->data[from][row],     1, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD);
-    }
-
-    if (rank < size - 1) {
-        MPI_Send(&state->data[to - 1][row], 1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
-        MPI_Recv(&state->data[to][row],     1, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 }
 
 static void data_free(data_xy *state) {
-    free(state->data[0]);
+    for (uint32_t i = 0; i < state->d.x.pts_num; i++) {
+        free(state->data[i]);
+    }
+
     free(state->data);
 }
 
-int main(int argc, char **argv) {
-    int process_rank, size_of_cluster;
-
-    MPI_Init(&argc, &argv);
-    MPI_Comm_size(MPI_COMM_WORLD, &size_of_cluster);
-    MPI_Comm_rank(MPI_COMM_WORLD, &process_rank);
-
-    dim x = {100.0, 100000, 0.0};
+int main(int argc, const char **argv) {
+    dim x = {1.0, 1000, 0.0};
     x.step = x.len / x.pts_num;
 
-    dim t = {0.1, 20000, 0.0};
+    dim t = {20.0, 1000000, 0.0};
     t.step = t.len / t.pts_num;
 
     const dimensions dims = {x, t};
@@ -153,50 +138,19 @@ int main(int argc, char **argv) {
         data[x.pts_num - 1][i] = data[x.pts_num - 1][0] - (t.step * i);
     }
 
-    data_xy state = {data, dims, 1e-2};
+    data_xy state = {data, dims, 1e-3};
 
-    // MPI_Barrier(MPI_COMM_WORLD);
-
-    uint32_t chunk_size = (x.pts_num / (size_of_cluster));
-    
-    uint32_t init_i = 1 + chunk_size * process_rank;
-    uint32_t end_i = init_i + chunk_size;
-
-    if ((process_rank == size_of_cluster - 1) || (end_i > x.pts_num - 1)) {
-        end_i = x.pts_num - 1;
+    for (uint32_t row = 0; row < t.pts_num; row++) {
+        calculate_row(&state, row);
+        // printf("\rDone %6d/%6d rows", row, t.pts_num);
     }
 
-    printf("Process %d started [%d; %d]\n", process_rank, init_i, end_i - 1);
+    // printf("\n");
 
-    double start = MPI_Wtime();
+    // data_print(&state);
 
-    for (uint32_t row = 1; row < t.pts_num; row++) {
-        calculate_row(&state, row, init_i, end_i, process_rank, size_of_cluster);
-    }
-
-    double end = MPI_Wtime();
-
-    printf("Process %d finished, time = %lf\n", process_rank, end - start);
-
-    // MPI_Barrier(MPI_COMM_WORLD);
-
-    char name[] = "logs/process_log_        ";
-    sprintf(name + 17, "%.8d", process_rank);
-
-    FILE *log = fopen(name, "w");
-
-    for (int rank = 0; rank < size_of_cluster; rank++) {
-        if (rank == process_rank) {
-            for (uint32_t i = init_i; i < end_i; i++) {
-                fprintf(log, "data[%d][%d] = %lf\n", i, t.pts_num - 1, data[i][t.pts_num - 1]);
-            }
-        }
-    }
-
-    fclose(log);
-
-    MPI_Finalize();
     // draw_results(&state);
+
     data_free(&state);
 
     return 0;
