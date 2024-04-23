@@ -1,0 +1,33 @@
+USAGE: lab2.elf NUM_OF_THREADS START_X END_X
+
+./lab2.elf 1 1e-5 100
+Resulting sum = 5.02796
+./lab2.elf 1 1e-5 100  45,92s user 0,00s system 99% cpu 45,942 total
+
+./lab2.elf 2 1e-5 100
+Resulting sum = 5.02796
+./lab2.elf 2 1e-5 100  50,40s user 0,00s system 199% cpu 25,202 total
+
+./lab2.elf 3 1e-5 100
+Resulting sum = 5.02796
+./lab2.elf 3 1e-5 100  41,59s user 0,00s system 99% cpu 41,593 total
+
+./lab2.elf 3 1e-5 100
+Resulting sum = 5.02796
+./lab2.elf 3 1e-5 100  41,71s user 0,00s system 299% cpu 13,908 total
+
+./lab2.elf 4 1e-5 100
+Resulting sum = 5.02796
+./lab2.elf 4 1e-5 100  41,78s user 0,00s system 399% cpu 10,448 total
+
+./lab2.elf 5 1e-5 100
+Resulting sum = 5.02796
+./lab2.elf 5 1e-5 100  41,70s user 0,00s system 399% cpu 10,431 total
+
+./lab2.elf 6 1e-5 100
+Resulting sum = 5.02796
+./lab2.elf 6 1e-5 100  41,64s user 0,00s system 100% cpu 41,615 total
+
+./lab2.elf 6 1e-5 100
+Resulting sum = 5.02796
+./lab2.elf 6 1e-5 100  43,33s user 0,02s system 599% cpu 7,232 total

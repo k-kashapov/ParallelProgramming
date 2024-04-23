@@ -51,7 +51,7 @@ static void draw_results(data_xy *state) {
     uint32_t step_x = (uint32_t)(1.0/scale_x);
     uint32_t step_y = (uint32_t)(1.0/scale_y);
 
-    printf("step_x = %d, step_y = %d\n", step_x, step_y);
+    printf("max_val = %lf, step_x = %d, step_y = %d\n", max_val, step_x, step_y);
 
     step_x = step_x == 0 ? 1 : step_x;
     step_y = step_y == 0 ? 1 : step_y;
@@ -77,10 +77,13 @@ static void draw_results(data_xy *state) {
 
 static double **data_alloc(uint32_t pts_x, uint32_t pts_y) {
     double **data = (double **) calloc(pts_x, sizeof(double *));
+    assert(data);
+
     double *data_buf = (double *) calloc(pts_x * pts_y, sizeof(double));
+    assert(data_buf);
 
     for (uint32_t i = 0; i < pts_x; i++) {
-        data[i] = data_buf + i;
+        data[i] = data_buf + i * pts_y;
     }
 
     return data;
@@ -134,7 +137,7 @@ int main(int argc, char **argv) {
     dim x = {100.0, 100000, 0.0};
     x.step = x.len / x.pts_num;
 
-    dim t = {0.1, 20000, 0.0};
+    dim t = {0.01, 2000, 0.0};
     t.step = t.len / t.pts_num;
 
     const dimensions dims = {x, t};
@@ -146,14 +149,16 @@ int main(int argc, char **argv) {
     }
 
     for (uint32_t i = 0; i < t.pts_num; i++) {
-        data[0][i] = data[0][0] + (t.step * i);
+        data[0][i] = data[0][0] + (t.step * i) * 5;
     }
 
     for (uint32_t i = 1; i < t.pts_num; i++) {
-        data[x.pts_num - 1][i] = data[x.pts_num - 1][0] - (t.step * i);
+        data[x.pts_num - 1][i] = data[x.pts_num - 1][0] - (t.step * i) * 4;
     }
 
-    data_xy state = {data, dims, 1e-2};
+    data_xy state = {data, dims, 5e-2};
+
+    assert(state.d_coeff * t.step / x.step / x.step < 1);
 
     // MPI_Barrier(MPI_COMM_WORLD);
 
@@ -178,25 +183,19 @@ int main(int argc, char **argv) {
 
     printf("Process %d finished, time = %lf\n", process_rank, end - start);
 
-    // MPI_Barrier(MPI_COMM_WORLD);
+    // char name[] = "logs/process_log_        ";
+    // sprintf(name + 17, "%d_of_%d", process_rank, size_of_cluster);
 
-    char name[] = "logs/process_log_        ";
-    sprintf(name + 17, "%.8d", process_rank);
+    // FILE *log = fopen(name, "w");
 
-    FILE *log = fopen(name, "w");
+    // for (uint32_t i = init_i; i < end_i; i++) {
+    //     fprintf(log, "data[%d][%d] = %lf\n", i, t.pts_num - 1, data[i][t.pts_num - 1]);
+    // }
 
-    for (int rank = 0; rank < size_of_cluster; rank++) {
-        if (rank == process_rank) {
-            for (uint32_t i = init_i; i < end_i; i++) {
-                fprintf(log, "data[%d][%d] = %lf\n", i, t.pts_num - 1, data[i][t.pts_num - 1]);
-            }
-        }
-    }
-
-    fclose(log);
+    // fclose(log);
 
     MPI_Finalize();
-    // draw_results(&state);
+    draw_results(&state);
     data_free(&state);
 
     return 0;
