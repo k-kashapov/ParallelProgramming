@@ -96,10 +96,6 @@ struct task {
 
 static struct task integral = {};
 
-// TODO: remove
-sem_t test_sem;
-int ranks = 0;
-
 long double func(long double x) {
     return sinl(1.0 / x);
 }
@@ -115,13 +111,10 @@ void *calcIntegral(void *vargp) {
 
     stk_ctor(&locl_stk, spk);
 
-    // TODO: remove
-    sem_wait(&test_sem);
-    int rank = ranks++;
-    sem_post(&test_sem);
+    unsigned long rank = pthread_self();
 
     while (1) {
-        DEBUG("%d: New iteration\n", rank);
+        DEBUG("%lu: New iteration\n", rank);
         // Wait for any tasks in the stack
         sem_wait(&integral.tsk_sem);
 
@@ -161,6 +154,7 @@ void *calcIntegral(void *vargp) {
             long double sum_cb = (fc + my_task.fb) * (my_task.end_x - c) / 2.0;
 
             long double sum = sum_ac + sum_cb;
+
             // DEBUG("sum [%Lg; %Lg) = %Lg\n", my_task.start_x, c, sum_ac);
             // DEBUG("sum [%Lg; %Lg) = %Lg\n", c, my_task.end_x, sum_cb);
 
@@ -181,7 +175,7 @@ void *calcIntegral(void *vargp) {
 
             if ((locl_stk.len > integral.nproc) && (integral.globl_stk.len == 0)) {
                 sem_wait(&integral.stk_sem);
-                DEBUG("%d: Sharing with others\n", rank);
+                DEBUG("%lu: Sharing with others\n", rank);
 
                 while (locl_stk.len > 1) {
                     struct interval curr;
@@ -192,17 +186,15 @@ void *calcIntegral(void *vargp) {
 
                 sem_post(&integral.stk_sem);
             }
-
-            sched_yield();
         }
 
-        DEBUG("%d: Exited local stack\n", rank);
+        DEBUG("%lu: Exited local stack\n", rank);
 
         sem_wait(&integral.stk_sem);
         integral.nactive--;
 
         if ((integral.nactive == 0) && (integral.globl_stk.len == 0)) {
-            printf("%d: Filling with terminating intervals\n", rank);
+            printf("%lu: Filling with terminating intervals\n", rank);
             for (int i = 0; i < integral.nproc; i++) {
                 struct interval curr = {2, 1, 0, 0, 0};
                 push(&integral.globl_stk, &curr);
@@ -269,19 +261,16 @@ int main(int argc, char **argv) {
     sem_init(&integral.stk_sem, 0, 1);
     sem_init(&integral.tsk_sem, 0, 1);
 
-    // TODO: remove
-    sem_init(&test_sem, 0, 1);
-
     pthread_t *thread_ids = (pthread_t *) calloc(size_of_cluster, sizeof(pthread_t));
 
     for (int i = 0; i < size_of_cluster; i++) {
         pthread_create(thread_ids + i, NULL, calcIntegral, NULL);
-        DEBUG("Started thread %d\n", i);
+        DEBUG("Started thread %lu\n", thread_ids[i]);
     }
 
     for (int i = 0; i < size_of_cluster; i++) {
         pthread_join(thread_ids[i], NULL);
-        DEBUG("Thread %d finished\n", i);
+        DEBUG("Thread %lu finished\n", thread_ids[i]);
     }
 
     printf("Resulting sum = %.10Lg\n", integral.sum);
@@ -292,9 +281,6 @@ int main(int argc, char **argv) {
     sem_destroy(&integral.sum_sem);
     sem_destroy(&integral.stk_sem);
     sem_destroy(&integral.tsk_sem);
-
-    // TODO: remove
-    sem_destroy(&test_sem);
 
     return 0;
 }
