@@ -10,8 +10,8 @@ const int   WIN_HEIGHT = 720;
 
 const int   MAP_WIDTH  = 1000;
 const int   MAP_HEIGHT = 1000;
-const int   PADDING    = 250;
-const float FILL       = 0.3;
+const int   PADDING    = 100;
+const float FILL       = 0.1;
 
 const float CAMERA_ZOOM_SPD = 1.01;
 const float CAMERA_SPEED = 270;
@@ -29,35 +29,15 @@ struct std::hash<sf::Vector2i> {
 
 class WorldState {
 private:
-    std::vector<std::vector<bool>> field;
-    std::list<sf::Vector2i> cells;
-    std::unordered_map<sf::Vector2i, std::list<sf::Vector2i>::iterator> map;
-
     size_t countNeighbours(size_t x, size_t y) {
         return field[x+1][y] + field[x-1][y] + field[x][y-1] + field[x][y+1]
                 + field[x+1][y+1] + field[x+1][y-1] + field[x-1][y+1] + field[x-1][y-1];
     }
 
-    void removeCell(size_t x, size_t y) {
-        field[x][y] = false;
-        auto found = map.find(sf::Vector2i(x, y));
-        if (found != map.end()) {
-            cells.erase(found->second);
-        }
-    }
-
-    void flipCell(sf::Vector2i cell) {
-        if (field[cell.x][cell.y]) {
-            removeCell(cell.x, cell.y);
-        } else {
-            AddCell(cell.x, cell.y);
-        }
-    }
-
     void updateCells() {
-        // std::cout << "update cells\n";
-        std::vector<sf::Vector2i> flips{};
-        #pragma omp parallel firstprivate(flips)
+        std::vector<std::vector<bool>> local_field = field;
+
+        #pragma omp parallel firstprivate(local_field)
         {
             #pragma omp for schedule(static)
             for (size_t x = 1; x < (field.size() - 1); x++) {
@@ -66,29 +46,32 @@ private:
 
                     if (field[x][y]) {
                         if (neigh > 3 || neigh < 2) {
-                            // std::cout << "remove cell at " << x << ", " << y << " as it has " << neigh << " neigh\n";
-                            flips.push_back(sf::Vector2i(x, y));
+                            local_field[x][y] = false;
                             continue;
                         }
                     } else if (neigh == 3) {
-                        // std::cout << "add cell at " << x << ", " << y << " as it has " << neigh << " neigh\n";
-                        flips.push_back(sf::Vector2i(x, y));
+                        local_field[x][y] = true;
                         continue;
                     }
                 }
             }
 
-            #pragma omp critical
-            for (auto flip : flips) {
-                // std::cout << flip.x << ", " << flip.y << "\n";
-                flipCell(flip);
+            #pragma omp barrier
+
+            #pragma omp for schedule(static)
+            for (size_t x = 1; x < (field.size() - 1); x++) {
+                for (size_t y = 1; y < field[0].size() - 1; y++) {
+                    field[x][y] = local_field[x][y];
+                }
             }
         }
     }
 
 public:
+    std::vector<std::vector<bool>> field;
+
     WorldState(size_t x, size_t y)
-        : field(std::vector<std::vector<bool>>(x, std::vector<bool>(y))), cells()
+        : field(std::vector<std::vector<bool>>(x, std::vector<bool>(y)))
     {}
 
     void AddCell(size_t x, size_t y) {
@@ -96,8 +79,6 @@ public:
         if (field.at(x).at(y)) return;
 
         field.at(x).at(y) = true;
-        cells.push_back(sf::Vector2i(x, y));
-        map[sf::Vector2i(x, y)] = std::prev(cells.end());
     }
 
     bool GetFieldAt(size_t x, size_t y) {
@@ -113,10 +94,6 @@ public:
             time_passed = 0;
             updateCells();
         }
-    }
-
-    const std::list<sf::Vector2i>& GetCells() {
-        return cells;
     }
 };
 
@@ -137,10 +114,6 @@ int main(int argc, const char **argv)
 
     sf::Vector2f center = sf::Vector2f(float(MAP_WIDTH) / 2, float(MAP_HEIGHT) / 2);
     sf::Vector2f win_center = sf::Vector2f(float(WIN_WIDTH) / 2, float(WIN_HEIGHT) / 2);
-
-    // sf::Text fps;
-    // fps.setFillColor(sf::Color::Red);
-    // fps.setCharacterSize(24);
 
     // window.setFramerateLimit(60);
     window.setVerticalSyncEnabled(false);
@@ -199,25 +172,23 @@ int main(int argc, const char **argv)
         // }
         // std::cout << "update end\n";
 
-        if (ws.GetCells().size() == 0) {
-            std::cout << "All dead\n";
-            window.close();
-        }
-
-        for (auto cell : ws.GetCells()) {
-            shape.setPosition(CELL_SIZE * (sf::Vector2f(cell.x, cell.y) - center) + win_center);
-            window.draw(shape);
+        for (size_t x = 1; x < (ws.field.size() - 1); x++) {
+            for (size_t y = 1; y < ws.field[0].size() - 1; y++) {
+                if (ws.field[x][y] == true) {
+                    shape.setPosition(CELL_SIZE * (sf::Vector2f(x, y) - center) + win_center);
+                    window.draw(shape);
+                }
+            }
         }
 
         i++;
 
-        if (i > 20) {
-            std::cout << '\r' << (1000000.0 * 20 / fpsTime) << "            ";
+        if (i > 10) {
+            std::cout << '\r' << (1000000.0 * 10 / fpsTime) << "\t";
             std::flush(std::cout);
             fpsTime = 0;
             i = 0;
         }
-        // window.draw(fps);
 
         window.display();
     }
