@@ -176,7 +176,7 @@ int main(int argc, const char **argv)
             for (size_t y = 1; y < ws.field[0].size() - 1; y++) {
                 if (ws.field[x][y] == true) {
                     shape.setPosition(CELL_SIZE * (sf::Vector2f(x, y) - center) + win_center);
-                    window.draw(shape);
+                    // window.draw(shape);
                 }
             }
         }
@@ -190,7 +190,7 @@ int main(int argc, const char **argv)
             i = 0;
         }
 
-        window.display();
+        // window.display();
     }
 
     return 0;
