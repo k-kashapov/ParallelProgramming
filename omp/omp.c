@@ -4,12 +4,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 void usage(const char *name) {
     printf("USAGE: %s ISIZE JSIZE OUTPUT_FILE\n", name);
 }
 
 #define at(i, j) (buf[(i) * JSIZE + (j)])
+#define REPEAT_NUM 300
 
 int main(int argc, char **argv) {
     int ISIZE = 0;
@@ -21,17 +23,17 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    char *end = NULL;
-    ISIZE = strtol(argv[1], &end, 10);
-    if (end == argv[1]) {
+    char *arg_end = NULL;
+    ISIZE = strtol(argv[1], &arg_end, 10);
+    if (arg_end == argv[1]) {
         printf("ERROR: invalid ISIZE\n");
         usage(argv[0]);
         return 0;
     }
 
-    end = NULL;
-    JSIZE = strtol(argv[2], &end, 10);
-    if (end == argv[2]) {
+    arg_end = NULL;
+    JSIZE = strtol(argv[2], &arg_end, 10);
+    if (arg_end == argv[2]) {
         printf("ERROR: invalid JSIZE\n");
         usage(argv[0]);
         return 0;
@@ -56,33 +58,39 @@ int main(int argc, char **argv) {
     // Save rightmost 3 columns to additional space in bufer
     memcpy(leftover, buf + (ISIZE - 3) * JSIZE, leftover_size);
 
-    #pragma omp parallel
-    {
-        // int num = omp_get_num_threads();
-        // int chunk_size = ISIZE / num;
+    double start = omp_get_wtime();
 
-        // int id = omp_get_thread_num();
-        // int chunk_start = id * chunk_size;
-        // int chunk_end = (id + 1) * chunk_size;
-
-        // if (id == num - 1) {
-        //     chunk_end = ISIZE - 3;
-        // }
-
-        // printf("%d: from %d to %d\n", id, chunk_start, chunk_end);
-
-        #pragma omp for schedule(static)
-        for (int i = 0; i < ISIZE; i++) {
-            for (int j = 2; j < JSIZE; j++) {
-                at(i + 3, j) = sin(0.1 * at(i + 3, j - 2));
+    for (int i = 0; i < REPEAT_NUM; i++) {
+        #pragma omp parallel
+        {
+            #pragma omp for schedule(auto)
+            for (int i = 0; i < ISIZE; i++) {
+                for (int j = 0; j < JSIZE; j++) {
+                    at(i, j) = 10 * i + j;
+                }
             }
+
+            #pragma omp for schedule(auto)
+            for (int i = 3; i < ISIZE; i++) {
+                for (int j = 2; j < JSIZE; j++) {
+                    at(i, j) = sin(0.1 * at(i, j - 2));
+                }
+            }
+        }
+
+        for (int i = 3; i < ISIZE; i++) {
+            at(i, 0) = at(i - 3, 0);
+            at(i, 1) = at(i - 3, 0);
         }
     }
 
-    for (int i = 3; i < ISIZE; i++) {
-        at(i, 0) = at(i - 3, 0);
-        at(i, 1) = at(i - 3, 1);
-    }
+    double end = omp_get_wtime();
+
+    double elapsed = (float)(end - start);
+
+    printf("Elapsed: %lf\n"
+           "One cycle = %lfs\n",
+           elapsed, elapsed / REPEAT_NUM);
 
     FILE *ff = fopen(argv[3], "w");
 
